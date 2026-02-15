@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from loguru import logger
 
@@ -12,23 +12,33 @@ from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import Config
 
+if TYPE_CHECKING:
+    from nanobot.agent.manager import MultiAgentManager
+
 
 class ChannelManager:
     """
     Manages chat channels and coordinates message routing.
-    
+
     Responsibilities:
-    - Initialize enabled channels (Telegram, WhatsApp, etc.)
+    - Initialize enabled channels (Telegram, Discord, etc.)
     - Start/stop channels
     - Route outbound messages
+    - Route inbound messages to appropriate agent
     """
-    
-    def __init__(self, config: Config, bus: MessageBus):
+
+    def __init__(
+        self,
+        config: Config,
+        bus: MessageBus,
+        agent_manager: MultiAgentManager | None = None,
+    ):
         self.config = config
         self.bus = bus
+        self.agent_manager = agent_manager
         self.channels: dict[str, BaseChannel] = {}
         self._dispatch_task: asyncio.Task | None = None
-        
+
         self._init_channels()
     
     def _init_channels(self) -> None:
@@ -46,17 +56,6 @@ class ChannelManager:
                 logger.info("Telegram channel enabled")
             except ImportError as e:
                 logger.warning(f"Telegram channel not available: {e}")
-        
-        # WhatsApp channel
-        if self.config.channels.whatsapp.enabled:
-            try:
-                from nanobot.channels.whatsapp import WhatsAppChannel
-                self.channels["whatsapp"] = WhatsAppChannel(
-                    self.config.channels.whatsapp, self.bus
-                )
-                logger.info("WhatsApp channel enabled")
-            except ImportError as e:
-                logger.warning(f"WhatsApp channel not available: {e}")
 
         # Discord channel
         if self.config.channels.discord.enabled:
@@ -74,7 +73,7 @@ class ChannelManager:
             try:
                 from nanobot.channels.feishu import FeishuChannel
                 self.channels["feishu"] = FeishuChannel(
-                    self.config.channels.feishu, self.bus
+                    self.config.channels.feishu, self.bus, self.agent_manager
                 )
                 logger.info("Feishu channel enabled")
             except ImportError as e:
@@ -145,20 +144,24 @@ class ChannelManager:
             logger.error(f"Failed to start channel {name}: {e}")
 
     async def start_all(self) -> None:
-        """Start all channels and the outbound dispatcher."""
+        """Start all channels and the dispatchers."""
         if not self.channels:
             logger.warning("No channels enabled")
             return
-        
-        # Start outbound dispatcher
+
+        # Start dispatchers
         self._dispatch_task = asyncio.create_task(self._dispatch_outbound())
-        
+
+        # Start inbound dispatcher if multi-agent mode
+        if self.agent_manager:
+            asyncio.create_task(self._dispatch_inbound())
+
         # Start channels
         tasks = []
         for name, channel in self.channels.items():
             logger.info(f"Starting {name} channel...")
             tasks.append(asyncio.create_task(self._start_channel(name, channel)))
-        
+
         # Wait for all to complete (they should run forever)
         await asyncio.gather(*tasks, return_exceptions=True)
     
@@ -182,17 +185,63 @@ class ChannelManager:
             except Exception as e:
                 logger.error(f"Error stopping {name}: {e}")
     
+    async def _dispatch_inbound(self) -> None:
+        """Dispatch inbound messages to the appropriate agent."""
+        if not self.agent_manager:
+            return
+
+        logger.info("Inbound dispatcher started (multi-agent mode)")
+
+        while True:
+            try:
+                msg = await asyncio.wait_for(
+                    self.bus.consume_inbound(),
+                    timeout=1.0
+                )
+
+                # Get the appropriate agent loop for this session
+                session_key = msg.session_key
+
+                # Priority 1: Use agent_name from metadata (set by channel)
+                # Priority 2: Fallback to registry lookup by session_key
+                agent_name = None
+                if msg.metadata and "agent_name" in msg.metadata:
+                    agent_name = msg.metadata["agent_name"]
+                    logger.debug(f"Using agent '{agent_name}' from metadata for {session_key}")
+
+                try:
+                    if agent_name:
+                        agent_loop = self.agent_manager.get_loop(agent_name)
+                    else:
+                        agent_loop = self.agent_manager.get_loop_for_session(session_key)
+
+                    logger.debug(f"Routing message from {session_key} to agent '{agent_loop.context.workspace}'")
+
+                    # Process the message through the agent loop
+                    response = await agent_loop._process_message(msg)
+                    if response:
+                        await self.bus.publish_outbound(response)
+                except Exception as e:
+                    logger.error(f"Error processing message from {session_key}: {e}")
+
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Unexpected error in inbound dispatcher: {e}")
+
     async def _dispatch_outbound(self) -> None:
         """Dispatch outbound messages to the appropriate channel."""
         logger.info("Outbound dispatcher started")
-        
+
         while True:
             try:
                 msg = await asyncio.wait_for(
                     self.bus.consume_outbound(),
                     timeout=1.0
                 )
-                
+
                 channel = self.channels.get(msg.channel)
                 if channel:
                     try:
@@ -201,7 +250,7 @@ class ChannelManager:
                         logger.error(f"Error sending to {msg.channel}: {e}")
                 else:
                     logger.warning(f"Unknown channel: {msg.channel}")
-                    
+
             except asyncio.TimeoutError:
                 continue
             except asyncio.CancelledError:

@@ -20,20 +20,19 @@ from nanobot.agent.tools.web import WebSearchTool, WebFetchTool
 class SubagentManager:
     """
     Manages background subagent execution.
-    
+
     Subagents are lightweight agent instances that run in the background
     to handle specific tasks. They share the same LLM provider but have
     isolated context and a focused system prompt.
     """
-    
+
     def __init__(
         self,
         provider: LLMProvider,
         workspace: Path,
         bus: MessageBus,
-        model: str | None = None,
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
+        registry: "AgentRegistry",
+        agent_name: str = "main",
         brave_api_key: str | None = None,
         exec_config: "ExecToolConfig | None" = None,
         restrict_to_workspace: bool = False,
@@ -42,13 +41,16 @@ class SubagentManager:
         self.provider = provider
         self.workspace = workspace
         self.bus = bus
-        self.model = model or provider.get_default_model()
-        self.temperature = temperature
-        self.max_tokens = max_tokens
+        self.registry = registry
+        self.agent_name = agent_name
         self.brave_api_key = brave_api_key
         self.exec_config = exec_config or ExecToolConfig()
         self.restrict_to_workspace = restrict_to_workspace
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
+
+    def _get_config(self) -> "AgentDefinition":
+        """Get current agent configuration from registry (enables hot-reload)."""
+        return self.registry.get_agent_config(self.agent_name)
     
     async def spawn(
         self,
@@ -127,15 +129,18 @@ class SubagentManager:
             iteration = 0
             final_result: str | None = None
             
+            # Get current config dynamically (enables hot-reload)
+            config = self._get_config()
+
             while iteration < max_iterations:
                 iteration += 1
-                
+
                 response = await self.provider.chat(
                     messages=messages,
                     tools=tools.get_definitions(),
-                    model=self.model,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
+                    model=config.model,
+                    temperature=config.temperature,
+                    max_tokens=config.max_tokens,
                 )
                 
                 if response.has_tool_calls:

@@ -44,7 +44,7 @@ def test_onboard_fresh_install(mock_paths):
 
     assert result.exit_code == 0
     assert "Created config" in result.stdout
-    assert "Created workspace" in result.stdout
+    assert "Created main workspace" in result.stdout
     assert "nanobot is ready" in result.stdout
     assert config_file.exists()
     assert (workspace_dir / "AGENTS.md").exists()
@@ -87,6 +87,5 @@ def test_onboard_existing_workspace_safe_create(mock_paths):
     result = runner.invoke(app, ["onboard"], input="n\n")
 
     assert result.exit_code == 0
-    assert "Created workspace" not in result.stdout
-    assert "Created AGENTS.md" in result.stdout
+    assert "Created main workspace" in result.stdout
     assert (workspace_dir / "AGENTS.md").exists()

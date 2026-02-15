@@ -1,16 +1,10 @@
 """Configuration schema using Pydantic."""
 
 from pathlib import Path
+from typing import Any
+
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic_settings import BaseSettings
-
-
-class WhatsAppConfig(BaseModel):
-    """WhatsApp channel configuration."""
-    enabled: bool = False
-    bridge_url: str = "ws://localhost:3001"
-    bridge_token: str = ""  # Shared token for bridge auth (optional, recommended)
-    allow_from: list[str] = Field(default_factory=list)  # Allowed phone numbers
 
 
 class TelegramConfig(BaseModel):
@@ -144,7 +138,6 @@ class QQConfig(BaseModel):
 
 class ChannelsConfig(BaseModel):
     """Configuration for chat channels."""
-    whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
     feishu: FeishuConfig = Field(default_factory=FeishuConfig)
@@ -155,19 +148,47 @@ class ChannelsConfig(BaseModel):
     qq: QQConfig = Field(default_factory=QQConfig)
 
 
-class AgentDefaults(BaseModel):
-    """Default agent configuration."""
-    workspace: str = "~/.nanobot/workspace"
+class AgentDefinition(BaseModel):
+    """Definition of a single agent configuration."""
+    workspace: str = "~/.nanocrew/workspaces/main"
     model: str = "anthropic/claude-opus-4-5"
     max_tokens: int = 8192
     temperature: float = 0.7
     max_tool_iterations: int = 20
     memory_window: int = 50
+    system_prompt: str = ""  # Optional custom system prompt
+
+
+class AgentBindings(BaseModel):
+    """Session to agent bindings."""
+    # Maps session_key (e.g., "feishu:oc_xxx") to agent_name
+    bindings: dict[str, str] = Field(default_factory=dict)
 
 
 class AgentsConfig(BaseModel):
-    """Agent configuration."""
-    defaults: AgentDefaults = Field(default_factory=AgentDefaults)
+    """Agent configuration with multi-agent support."""
+    registry: dict[str, AgentDefinition] = Field(default_factory=dict)
+    bindings: dict[str, str] = Field(default_factory=dict)
+
+    def get_agent(self, name: str) -> AgentDefinition:
+        """Get agent by name, fallback to main."""
+        if name in self.registry:
+            return self.registry[name]
+        if "main" in self.registry:
+            return self.registry["main"]
+        # Return default AgentDefinition if nothing exists
+        return AgentDefinition()
+
+    def get_agent_for_session(self, session_key: str) -> AgentDefinition:
+        """Get agent configuration for a specific session."""
+        agent_name = self.bindings.get(session_key, "main")
+        return self.get_agent(agent_name)
+
+    def get_main_agent(self) -> AgentDefinition:
+        """Get the main agent, creating it with defaults if needed."""
+        if "main" not in self.registry:
+            self.registry["main"] = AgentDefinition()
+        return self.registry["main"]
 
 
 class ProviderConfig(BaseModel):
@@ -234,12 +255,12 @@ class Config(BaseSettings):
     @property
     def workspace_path(self) -> Path:
         """Get expanded workspace path."""
-        return Path(self.agents.defaults.workspace).expanduser()
+        return Path(self.agents.get_main_agent().workspace).expanduser()
     
     def _match_provider(self, model: str | None = None) -> tuple["ProviderConfig | None", str | None]:
         """Match provider config and its registry name. Returns (config, spec_name)."""
         from nanobot.providers.registry import PROVIDERS
-        model_lower = (model or self.agents.defaults.model).lower()
+        model_lower = (model or self.agents.get_main_agent().model).lower()
 
         # Match by keyword (order follows PROVIDERS registry)
         for spec in PROVIDERS:

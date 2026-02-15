@@ -1,13 +1,46 @@
-__pycache__
+# Git
+.git
+
+# Local environment
+.env
+
+# Python
 *.pyc
 *.pyo
 *.pyd
 *.egg-info
+__pycache__
 dist/
 build/
-.git
-.env
+poetry.lock
+
+# Testing
+tests/
+.pytest_cache/
+botpy.log
+
+# Documentation
+docs/
+
+# Assets
 .assets
-node_modules/
-bridge/dist/
+
+# nanobot local workspace (contains sensitive config)
+.nanobot/
 workspace/
+
+# OpenSpec local changes
+openspec/
+
+# Claude Code
+.claude/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

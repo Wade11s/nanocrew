@@ -1,11 +1,9 @@
-.assets
+# Local environment
 .env
-*.pyc
-dist/
-build/
-docs/
-*.egg-info/
-*.egg
+.venv/
+venv/
+
+# Python
 *.pyc
 *.pyo
 *.pyd
@@ -13,10 +11,39 @@ docs/
 *.pyz
 *.pywz
 *.pyzz
-.venv/
-venv/
+*.egg
+*.egg-info/
 __pycache__/
+dist/
+build/
 poetry.lock
+
+# Testing
 .pytest_cache/
 botpy.log
-tests/
+
+# Documentation
+docs/
+
+# Assets
+.assets
+
+# nanobot local workspace (contains sensitive config)
+.nanobot/
+workspace/
+
+# OpenSpec local changes
+openspec/
+
+# Claude Code
+.claude/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

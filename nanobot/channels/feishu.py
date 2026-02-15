@@ -9,10 +9,15 @@ from typing import Any
 
 from loguru import logger
 
+from typing import TYPE_CHECKING
+
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
 from nanobot.config.schema import FeishuConfig
+
+if TYPE_CHECKING:
+    from nanobot.agent.manager import MultiAgentManager
 
 try:
     import lark_oapi as lark
@@ -89,18 +94,23 @@ def _extract_post_text(content_json: dict) -> str:
 class FeishuChannel(BaseChannel):
     """
     Feishu/Lark channel using WebSocket long connection.
-    
+
     Uses WebSocket to receive events - no public IP or webhook required.
-    
+
     Requires:
     - App ID and App Secret from Feishu Open Platform
     - Bot capability enabled
     - Event subscription enabled (im.message.receive_v1)
     """
-    
+
     name = "feishu"
-    
-    def __init__(self, config: FeishuConfig, bus: MessageBus):
+
+    def __init__(
+        self,
+        config: FeishuConfig,
+        bus: MessageBus,
+        agent_manager: "MultiAgentManager | None" = None,
+    ):
         super().__init__(config, bus)
         self.config: FeishuConfig = config
         self._client: Any = None
@@ -108,6 +118,7 @@ class FeishuChannel(BaseChannel):
         self._ws_thread: threading.Thread | None = None
         self._processed_message_ids: OrderedDict[str, None] = OrderedDict()  # Ordered dedup cache
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._agent_manager = agent_manager
     
     async def start(self) -> None:
         """Start the Feishu bot with WebSocket long connection."""
@@ -343,30 +354,30 @@ class FeishuChannel(BaseChannel):
             event = data.event
             message = event.message
             sender = event.sender
-            
+
             # Deduplication check
             message_id = message.message_id
             if message_id in self._processed_message_ids:
                 return
             self._processed_message_ids[message_id] = None
-            
+
             # Trim cache: keep most recent 500 when exceeds 1000
             while len(self._processed_message_ids) > 1000:
                 self._processed_message_ids.popitem(last=False)
-            
+
             # Skip bot messages
             sender_type = sender.sender_type
             if sender_type == "bot":
                 return
-            
+
             sender_id = sender.sender_id.open_id if sender.sender_id else "unknown"
             chat_id = message.chat_id
             chat_type = message.chat_type  # "p2p" or "group"
             msg_type = message.message_type
-            
+
             # Add reaction to indicate "seen"
             await self._add_reaction(message_id, "THUMBSUP")
-            
+
             # Parse message content
             if msg_type == "text":
                 try:
@@ -381,22 +392,34 @@ class FeishuChannel(BaseChannel):
                     content = message.content or ""
             else:
                 content = MSG_TYPE_MAP.get(msg_type, f"[{msg_type}]")
-            
+
             if not content:
                 return
-            
-            # Forward to message bus
+
+            # Forward to message bus with agent routing info
             reply_to = chat_id if chat_type == "group" else sender_id
+            session_key = f"feishu:{reply_to}"
+
+            # Get agent name for this session if multi-agent manager is available
+            agent_name = None
+            if self._agent_manager:
+                agent_name = self._agent_manager.registry.get_agent_name_for_session(session_key)
+                logger.info(f"Feishu: Session {session_key} -> Agent '{agent_name}'")
+
+            metadata: dict[str, Any] = {
+                "message_id": message_id,
+                "chat_type": chat_type,
+                "msg_type": msg_type,
+            }
+            if agent_name:
+                metadata["agent_name"] = agent_name
+
             await self._handle_message(
                 sender_id=sender_id,
                 chat_id=reply_to,
                 content=content,
-                metadata={
-                    "message_id": message_id,
-                    "chat_type": chat_type,
-                    "msg_type": msg_type,
-                }
+                metadata=metadata,
             )
-            
+
         except Exception as e:
             logger.error(f"Error processing Feishu message: {e}")

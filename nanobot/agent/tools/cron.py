@@ -9,16 +9,21 @@ from nanobot.cron.types import CronSchedule
 
 class CronTool(Tool):
     """Tool to schedule reminders and recurring tasks."""
-    
-    def __init__(self, cron_service: CronService):
+
+    def __init__(self, cron_service: CronService, agent: str = "main"):
         self._cron = cron_service
         self._channel = ""
         self._chat_id = ""
-    
+        self._agent = agent
+
     def set_context(self, channel: str, chat_id: str) -> None:
         """Set the current session context for delivery."""
         self._channel = channel
         self._chat_id = chat_id
+
+    def set_agent(self, agent: str) -> None:
+        """Set the agent context for job creation."""
+        self._agent = agent
     
     @property
     def name(self) -> str:
@@ -109,6 +114,7 @@ class CronTool(Tool):
             channel=self._channel,
             to=self._chat_id,
             delete_after_run=delete_after,
+            agent=self._agent,
         )
         return f"Created job '{job.name}' (id: {job.id})"
     

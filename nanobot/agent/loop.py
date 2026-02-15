@@ -33,6 +33,9 @@ class AgentLoop:
     3. Calls the LLM
     4. Executes tool calls
     5. Sends responses back
+
+    Configuration (model, temperature, etc.) is fetched dynamically from
+    AgentRegistry on each LLM call, enabling hot-reload of agent settings.
     """
 
     def __init__(
@@ -40,10 +43,9 @@ class AgentLoop:
         bus: MessageBus,
         provider: LLMProvider,
         workspace: Path,
-        model: str | None = None,
+        agent_name: str,
+        registry: "AgentRegistry",
         max_iterations: int = 20,
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
         memory_window: int = 50,
         brave_api_key: str | None = None,
         exec_config: "ExecToolConfig | None" = None,
@@ -56,10 +58,9 @@ class AgentLoop:
         self.bus = bus
         self.provider = provider
         self.workspace = workspace
-        self.model = model or provider.get_default_model()
+        self.agent_name = agent_name
+        self.registry = registry
         self.max_iterations = max_iterations
-        self.temperature = temperature
-        self.max_tokens = max_tokens
         self.memory_window = memory_window
         self.brave_api_key = brave_api_key
         self.exec_config = exec_config or ExecToolConfig()
@@ -73,16 +74,19 @@ class AgentLoop:
             provider=provider,
             workspace=workspace,
             bus=bus,
-            model=self.model,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
+            registry=registry,
+            agent_name=agent_name,
             brave_api_key=brave_api_key,
             exec_config=self.exec_config,
             restrict_to_workspace=restrict_to_workspace,
         )
-        
+
         self._running = False
         self._register_default_tools()
+
+    def _get_config(self) -> "AgentDefinition":
+        """Get current agent configuration from registry (enables hot-reload)."""
+        return self.registry.get_agent_config(self.agent_name)
     
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
@@ -114,7 +118,7 @@ class AgentLoop:
         
         # Cron tool (for scheduling)
         if self.cron_service:
-            self.tools.register(CronTool(self.cron_service))
+            self.tools.register(CronTool(self.cron_service, agent=self.agent_name))
     
     def _set_tool_context(self, channel: str, chat_id: str) -> None:
         """Update context for all tools that need routing info."""
@@ -145,15 +149,18 @@ class AgentLoop:
         final_content = None
         tools_used: list[str] = []
 
+        # Get current config dynamically (enables hot-reload)
+        config = self._get_config()
+
         while iteration < self.max_iterations:
             iteration += 1
 
             response = await self.provider.chat(
                 messages=messages,
                 tools=self.tools.get_definitions(),
-                model=self.model,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
+                model=config.model,
+                temperature=config.temperature,
+                max_tokens=config.max_tokens,
             )
 
             if response.has_tool_calls:
@@ -386,13 +393,16 @@ class AgentLoop:
 
 Respond with ONLY valid JSON, no markdown fences."""
 
+        # Get current config for model (enables hot-reload)
+        config = self._get_config()
+
         try:
             response = await self.provider.chat(
                 messages=[
                     {"role": "system", "content": "You are a memory consolidation agent. Respond only with valid JSON."},
                     {"role": "user", "content": prompt},
                 ],
-                model=self.model,
+                model=config.model,
             )
             text = (response.content or "").strip()
             if text.startswith("```"):
