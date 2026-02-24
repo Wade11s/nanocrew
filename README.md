@@ -6,9 +6,9 @@
   </p>
 </div>
 
-> **Based on [nanobot](https://github.com/HKUDS/nanobot)** — An ultra-lightweight personal AI assistant framework with multi-agent support.
+> **Based on [nanocrew](https://github.com/HKUDS/nanocrew)** — An ultra-lightweight personal AI assistant framework with multi-agent support.
 
-🐈 **nanocrew** extends nanobot with enhanced multi-agent capabilities, allowing you to run multiple isolated AI agents for different teams, projects, or use cases.
+🐈 **nanocrew** extends nanocrew with enhanced multi-agent capabilities, allowing you to run multiple isolated AI agents for different teams, projects, or use cases.
 
 ⚡️ Delivers core agent functionality in just **~4,000** lines of code.
 
@@ -105,11 +105,6 @@ This creates:
     "openrouter": {
       "apiKey": "sk-or-v1-xxx"
     }
-  },
-  "agents": {
-    "defaults": {
-      "model": "anthropic/claude-opus-4-5"
-    }
   }
 }
 ```
@@ -134,7 +129,7 @@ Talk to your nanocrew through Telegram, Discord, Feishu, DingTalk, Slack, Email,
 | **Email** | Medium (IMAP/SMTP credentials) |
 | **QQ** | Easy (app credentials) |
 
-See detailed setup instructions in the original [nanobot documentation](https://github.com/HKUDS/nanobot).
+See detailed setup instructions in the original [nanocrew documentation](https://github.com/HKUDS/nanocrew).
 
 ## 🐳 Docker
 
@@ -173,7 +168,7 @@ docker run -v ~/.nanocrew:/root/.nanocrew --rm nanocrew agent -m "Hello!"
 ## 📁 Project Structure
 
 ```
-nanobot/
+nanocrew/
 ├── agent/          # 🧠 Core agent logic
 │   ├── loop.py     #    Agent loop
 │   ├── manager.py  #    Multi-agent manager
@@ -191,15 +186,15 @@ nanobot/
 
 ## 🙏 Acknowledgments
 
-This project is based on [nanobot](https://github.com/HKUDS/nanobot) by HKUDS.
+This project is based on [nanocrew](https://github.com/HKUDS/nanocrew) by HKUDS.
 
-nanobot is an ultra-lightweight (~4,000 lines) personal AI assistant framework with excellent architecture and clean code. nanocrew extends it with enhanced multi-agent capabilities while maintaining the original simplicity.
+nanocrew is an ultra-lightweight (~4,000 lines) personal AI assistant framework with excellent architecture and clean code. nanocrew extends it with enhanced multi-agent capabilities while maintaining the original simplicity.
 
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE) for details.
 
-Copyright (c) 2025 nanobot contributors
+Copyright (c) 2025 nanocrew contributors
 Copyright (c) 2025 Wade11s (nanocrew)
 
 ---

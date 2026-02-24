@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from nanocrew.bus.events import OutboundMessage
-from nanocrew.bus.queue import MessageBus
-from nanocrew.channels.base import BaseChannel
-from nanocrew.config.schema import QQConfig
+from nanobot.bus.events import OutboundMessage
+from nanobot.bus.queue import MessageBus
+from nanobot.channels.base import BaseChannel
+from nanobot.config.schema import QQConfig
 
 try:
     import botpy
@@ -23,7 +23,6 @@ except ImportError:
 
 if TYPE_CHECKING:
     from botpy.message import C2CMessage
-    from nanocrew.agent.manager import MultiAgentManager
 
 
 def _make_bot_class(channel: "QQChannel") -> "type[botpy.Client]":
@@ -35,7 +34,7 @@ def _make_bot_class(channel: "QQChannel") -> "type[botpy.Client]":
             super().__init__(intents=intents)
 
         async def on_ready(self):
-            logger.info(f"QQ bot ready: {self.robot.name}")
+            logger.info("QQ bot ready: {}", self.robot.name)
 
         async def on_c2c_message_create(self, message: "C2CMessage"):
             await channel._on_message(message)
@@ -51,18 +50,11 @@ class QQChannel(BaseChannel):
 
     name = "qq"
 
-    def __init__(
-        self,
-        config: QQConfig,
-        bus: MessageBus,
-        agent_manager: "MultiAgentManager | None" = None,
-    ):
+    def __init__(self, config: QQConfig, bus: MessageBus):
         super().__init__(config, bus)
         self.config: QQConfig = config
         self._client: "botpy.Client | None" = None
         self._processed_ids: deque = deque(maxlen=1000)
-        self._bot_task: asyncio.Task | None = None
-        self._agent_manager = agent_manager
 
     async def start(self) -> None:
         """Start the QQ bot."""
@@ -78,8 +70,8 @@ class QQChannel(BaseChannel):
         BotClass = _make_bot_class(self)
         self._client = BotClass()
 
-        self._bot_task = asyncio.create_task(self._run_bot())
         logger.info("QQ bot started (C2C private message)")
+        await self._run_bot()
 
     async def _run_bot(self) -> None:
         """Run the bot connection with auto-reconnect."""
@@ -87,7 +79,7 @@ class QQChannel(BaseChannel):
             try:
                 await self._client.start(appid=self.config.app_id, secret=self.config.secret)
             except Exception as e:
-                logger.warning(f"QQ bot error: {e}")
+                logger.warning("QQ bot error: {}", e)
             if self._running:
                 logger.info("Reconnecting QQ bot in 5 seconds...")
                 await asyncio.sleep(5)
@@ -95,11 +87,10 @@ class QQChannel(BaseChannel):
     async def stop(self) -> None:
         """Stop the QQ bot."""
         self._running = False
-        if self._bot_task:
-            self._bot_task.cancel()
+        if self._client:
             try:
-                await self._bot_task
-            except asyncio.CancelledError:
+                await self._client.close()
+            except Exception:
                 pass
         logger.info("QQ bot stopped")
 
@@ -115,7 +106,7 @@ class QQChannel(BaseChannel):
                 content=msg.content,
             )
         except Exception as e:
-            logger.error(f"Error sending QQ message: {e}")
+            logger.error("Error sending QQ message: {}", e)
 
     async def _on_message(self, data: "C2CMessage") -> None:
         """Handle incoming message from QQ."""
@@ -126,28 +117,16 @@ class QQChannel(BaseChannel):
             self._processed_ids.append(data.id)
 
             author = data.author
-            user_id = str(getattr(author, "id", None) or getattr(author, "user_openid", "unknown"))
+            user_id = str(getattr(author, 'id', None) or getattr(author, 'user_openid', 'unknown'))
             content = (data.content or "").strip()
             if not content:
                 return
-
-            # Build session key and get agent binding
-            session_key = f"qq:{user_id}"
-            agent_name = None
-            if self._agent_manager:
-                agent_name = self._agent_manager.registry.get_agent_name_for_session(session_key)
-                logger.info(f"QQ: Session {session_key} -> Agent '{agent_name}'")
-
-            # Build metadata with agent info
-            metadata: dict[str, Any] = {"message_id": data.id}
-            if agent_name:
-                metadata["agent_name"] = agent_name
 
             await self._handle_message(
                 sender_id=user_id,
                 chat_id=user_id,
                 content=content,
-                metadata=metadata,
+                metadata={"message_id": data.id},
             )
-        except Exception as e:
-            logger.error(f"Error handling QQ message: {e}")
+        except Exception:
+            logger.exception("Error handling QQ message")

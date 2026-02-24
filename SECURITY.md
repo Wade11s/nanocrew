@@ -5,7 +5,7 @@
 If you discover a security vulnerability in nanocrew, please report it by:
 
 1. **DO NOT** open a public GitHub issue
-2. Create a private security advisory on GitHub or contact the repository maintainers
+2. Create a private security advisory on GitHub or contact the repository maintainers (xubinrencs@gmail.com)
 3. Include:
    - Description of the vulnerability
    - Steps to reproduce
@@ -109,7 +109,7 @@ pip install pip-audit
 pip-audit
 
 # Update to latest secure versions
-pip install --upgrade nanobot-ai
+pip install --upgrade nanocrew-ai
 ```
 
 For Node.js dependencies (WhatsApp bridge):
@@ -123,7 +123,7 @@ npm audit fix
 - Keep `litellm` updated to the latest version for security fixes
 - We've updated `ws` to `>=8.17.1` to fix DoS vulnerability
 - Run `pip-audit` or `npm audit` regularly
-- Subscribe to security advisories for nanobot and its dependencies
+- Subscribe to security advisories for nanocrew and its dependencies
 
 ### 7. Production Deployment
 
@@ -133,7 +133,7 @@ For production use:
    ```bash
    # Run in a container or VM
    docker run --rm -it python:3.11
-   pip install nanobot-ai
+   pip install nanocrew-ai
    ```
 
 2. **Use a Dedicated User**
@@ -163,7 +163,7 @@ For production use:
 6. **Regular Updates**
    ```bash
    # Check for updates weekly
-   pip install --upgrade nanobot-ai
+   pip install --upgrade nanocrew-ai
    ```
 
 ### 8. Development vs Production
@@ -256,8 +256,8 @@ Before deploying nanocrew:
 **Last Updated**: 2026-02-03
 
 For the latest security updates and announcements, check:
-- GitHub Security Advisories: https://github.com/HKUDS/nanobot/security/advisories
-- Release Notes: https://github.com/HKUDS/nanobot/releases
+- GitHub Security Advisories: https://github.com/HKUDS/nanocrew/security/advisories
+- Release Notes: https://github.com/HKUDS/nanocrew/releases
 
 ## License
 

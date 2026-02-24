@@ -1,4 +1,4 @@
-"""CLI commands for nanocrew."""
+"""CLI commands for nanobot."""
 
 import asyncio
 import os
@@ -18,11 +18,12 @@ from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.patch_stdout import patch_stdout
 
-from nanocrew import __version__, __logo__
+from nanobot import __version__, __logo__
+from nanobot.config.schema import Config
 
 app = typer.Typer(
-    name="nanocrew",
-    help=f"{__logo__} nanocrew - Multi-Agent AI Assistant",
+    name="nanobot",
+    help=f"{__logo__} nanobot - Personal AI Assistant",
     no_args_is_help=True,
 )
 
@@ -48,7 +49,6 @@ def _flush_pending_tty_input() -> None:
 
     try:
         import termios
-
         termios.tcflush(fd, termios.TCIFLUSH)
         return
     except Exception:
@@ -71,7 +71,6 @@ def _restore_terminal() -> None:
         return
     try:
         import termios
-
         termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, _SAVED_TERM_ATTRS)
     except Exception:
         pass
@@ -84,18 +83,17 @@ def _init_prompt_session() -> None:
     # Save terminal state so we can restore it on exit
     try:
         import termios
-
         _SAVED_TERM_ATTRS = termios.tcgetattr(sys.stdin.fileno())
     except Exception:
         pass
 
-    history_file = Path.home() / ".nanocrew" / "history" / "cli_history"
+    history_file = Path.home() / ".nanobot" / "history" / "cli_history"
     history_file.parent.mkdir(parents=True, exist_ok=True)
 
     _PROMPT_SESSION = PromptSession(
         history=FileHistory(str(history_file)),
         enable_open_in_editor=False,
-        multiline=False,  # Enter submits (single line mode)
+        multiline=False,   # Enter submits (single line mode)
     )
 
 
@@ -104,7 +102,7 @@ def _print_agent_response(response: str, render_markdown: bool) -> None:
     content = response or ""
     body = Markdown(content) if render_markdown else Text(content)
     console.print()
-    console.print(f"[cyan]{__logo__} nanocrew[/cyan]")
+    console.print(f"[cyan]{__logo__} nanobot[/cyan]")
     console.print(body)
     console.print()
 
@@ -133,17 +131,20 @@ async def _read_interactive_input_async() -> str:
         raise KeyboardInterrupt from exc
 
 
+
 def version_callback(value: bool):
     if value:
-        console.print(f"{__logo__} nanocrew v{__version__}")
+        console.print(f"{__logo__} nanobot v{__version__}")
         raise typer.Exit()
 
 
 @app.callback()
 def main(
-    version: bool = typer.Option(None, "--version", "-v", callback=version_callback, is_eager=True),
+    version: bool = typer.Option(
+        None, "--version", "-v", callback=version_callback, is_eager=True
+    ),
 ):
-    """nanocrew - Personal AI Assistant."""
+    """nanobot - Personal AI Assistant."""
     pass
 
 
@@ -154,21 +155,17 @@ def main(
 
 @app.command()
 def onboard():
-    """Initialize nanocrew configuration and workspace."""
-    from nanocrew.config.loader import get_config_path, load_config, save_config
-    from nanocrew.config.migration import ensure_agent_workspace
-    from nanocrew.config.schema import Config
-    from nanocrew.utils.helpers import get_workspace_path
-
+    """Initialize nanobot configuration and workspace."""
+    from nanobot.config.loader import get_config_path, load_config, save_config
+    from nanobot.config.schema import Config
+    from nanobot.utils.helpers import get_workspace_path
+    
     config_path = get_config_path()
-
-    # Create or refresh config
+    
     if config_path.exists():
         console.print(f"[yellow]Config already exists at {config_path}[/yellow]")
         console.print("  [bold]y[/bold] = overwrite with defaults (existing values will be lost)")
-        console.print(
-            "  [bold]N[/bold] = refresh config, keeping existing values and adding new fields"
-        )
+        console.print("  [bold]N[/bold] = refresh config, keeping existing values and adding new fields")
         if typer.confirm("Overwrite?"):
             config = Config()
             save_config(config)
@@ -176,234 +173,97 @@ def onboard():
         else:
             config = load_config()
             save_config(config)
-            console.print(
-                f"[green]✓[/green] Config refreshed at {config_path} (existing values preserved)"
-            )
+            console.print(f"[green]✓[/green] Config refreshed at {config_path} (existing values preserved)")
     else:
-        config = Config()
-        # Ensure main agent exists
-        config.agents.get_main_agent()
-        save_config(config)
+        save_config(Config())
         console.print(f"[green]✓[/green] Created config at {config_path}")
-
-    # Create main workspace with complete structure
+    
+    # Create workspace
     workspace = get_workspace_path()
-    ensure_agent_workspace(workspace, agent_name="main")
-    console.print(f"[green]✓[/green] Created main workspace at {workspace}")
-
-    console.print(f"\n{__logo__} nanocrew is ready!")
-    console.print("\n[bold]Multi-Agent System:[/bold]")
-    console.print(
-        "  • Default agent: [cyan]main[/cyan] at [cyan]~/.nanocrew/workspaces/main/[/cyan]"
-    )
-    console.print("  • Create new agents: [cyan]nanocrew agent create <name>[/cyan]")
-    console.print("  • Bind sessions: [cyan]nanocrew agent bind <session> <agent>[/cyan]")
+    
+    if not workspace.exists():
+        workspace.mkdir(parents=True, exist_ok=True)
+        console.print(f"[green]✓[/green] Created workspace at {workspace}")
+    
+    # Create default bootstrap files
+    _create_workspace_templates(workspace)
+    
+    console.print(f"\n{__logo__} nanobot is ready!")
     console.print("\nNext steps:")
-    console.print("  1. Add your API key to [cyan]~/.nanocrew/config.json[/cyan]")
+    console.print("  1. Add your API key to [cyan]~/.nanobot/config.json[/cyan]")
     console.print("     Get one at: https://openrouter.ai/keys")
-    console.print('  2. Chat: [cyan]nanocrew agent -m "Hello!"[/cyan]')
-    console.print("\n[dim]Want Telegram? See: https://github.com/HKUDS/nanocrew#-chat-apps[/dim]")
+    console.print("  2. Chat: [cyan]nanobot agent -m \"Hello!\"[/cyan]")
+    console.print("\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/nanobot#-chat-apps[/dim]")
+
+
 
 
 def _create_workspace_templates(workspace: Path):
-    """Create default workspace template files."""
-    templates = {
-        "AGENTS.md": """# Agent Instructions
+    """Create default workspace template files from bundled templates."""
+    from importlib.resources import files as pkg_files
 
-You are a helpful AI assistant. Be concise, accurate, and friendly.
+    templates_dir = pkg_files("nanobot") / "templates"
 
-## Guidelines
+    for item in templates_dir.iterdir():
+        if not item.name.endswith(".md"):
+            continue
+        dest = workspace / item.name
+        if not dest.exists():
+            dest.write_text(item.read_text(encoding="utf-8"), encoding="utf-8")
+            console.print(f"  [dim]Created {item.name}[/dim]")
 
-- Always explain what you're doing before taking actions
-- Ask for clarification when the request is ambiguous
-- Use tools to help accomplish tasks
-- Remember important information in memory/MEMORY.md; past events are logged in memory/HISTORY.md
-
-## Multi-Agent System
-
-This workspace supports multiple agents. Each agent has its own workspace, model configuration, and can be bound to specific chat sessions.
-
-### Creating a New Agent
-
-When asked to create a dedicated agent for a chat group or purpose:
-
-1. **Choose an appropriate name**: Use lowercase letters, numbers, and underscores. Good examples:
-   - `backend_dev` - for backend development discussions
-   - `product_team` - for product management discussions
-   - `research_agent` - for research tasks
-
-2. **Use the CLI command**:
-   ```bash
-   nanocrew agent create <name> --workspace "~/.nanocrew/workspaces/<name>" --model "<model>"
-   ```
-
-3. **Recommended models**:
-   - `anthropic/claude-opus-4-5` - for complex reasoning
-   - `anthropic/claude-sonnet-4` - for general tasks (faster)
-   - `openai/gpt-4` - for writing tasks
-
-### Binding an Agent to a Session
-
-After creating an agent, bind it to a specific chat session:
-
-```bash
-nanocrew agent bind <session_key> <agent_name>
-```
-
-**Session key format**:
-- Feishu: `feishu:<chat_id>` (e.g., `feishu:oc_d5b928767f21d232afd24dc720890e78`)
-- Telegram: `telegram:<chat_id>`
-- Discord: `discord:<channel_id>`
-
-### Example: Creating a Dedicated Agent
-
-If a user says "Create an agent for the backend team in this Feishu group":
-
-1. Get the Chat ID from the user's message metadata
-2. Create the agent: `nanocrew agent create backend_dev --temperature 0.3`
-3. Bind it: `nanocrew agent bind feishu:<chat_id> backend_dev`
-4. Copy relevant config files (like API keys) to the new workspace if needed
-
-### Viewing All Agents
-
-```bash
-nanocrew agent list
-```
-
-This shows all agents and their bindings.
-""",
-        "MULTI_AGENT_GUIDE.md": """# Multi-Agent System Guide
-
-This file provides detailed guidance on the multi-agent system.
-
-## Overview
-
-- **Main Agent** (`main`): The default agent used when no specific binding exists
-- **Custom Agents**: Created for specific purposes or teams
-- **Workspace Structure**: Each agent has its own workspace at `~/.nanocrew/workspaces/<agent_name>/`
-
-## When to Create a New Agent
-
-Create a new agent when:
-- A chat group needs a specialized system prompt
-- Different teams need isolated workspaces
-- You want to use different models for different purposes
-- You need to separate memory/context between different use cases
-
-## Agent Configuration
-
-Each agent can have its own:
-- **Model**: Different LLM for different capabilities
-- **Temperature**: 0.3 for coding, 0.7 for creative tasks
-- **System Prompt**: Custom behavior via AGENTS.md in its workspace
-- **Skills**: Agent-specific skills in its workspace/skills/ directory
-
-## CLI Commands Reference
-
-```bash
-# List all agents and bindings
-nanocrew agent list
-
-# Show agent details
-nanocrew agent show <name>
-
-# Create a new agent
-nanocrew agent create <name> [--workspace <path>] [--model <model>] [--temperature <temp>]
-
-# Bind a session to an agent
-nanocrew agent bind <session_key> <agent_name>
-
-# Unbind a session
-nanocrew agent unbind <session_key>
-```
-
-## Hot Reload
-
-Configuration changes take effect within 5 seconds without restarting the gateway.
-""",
-        "SOUL.md": """# Soul
-
-I am nanocrew, a lightweight AI assistant.
-
-## Personality
-
-- Helpful and friendly
-- Concise and to the point
-- Curious and eager to learn
-
-## Values
-
-- Accuracy over speed
-- User privacy and safety
-- Transparency in actions
-""",
-        "USER.md": """# User
-
-Information about the user goes here.
-
-## Preferences
-
-- Communication style: (casual/formal)
-- Timezone: (your timezone)
-- Language: (your preferred language)
-""",
-    }
-
-    for filename, content in templates.items():
-        file_path = workspace / filename
-        if not file_path.exists():
-            file_path.write_text(content)
-            console.print(f"  [dim]Created {filename}[/dim]")
-
-    # Create memory directory and MEMORY.md
     memory_dir = workspace / "memory"
     memory_dir.mkdir(exist_ok=True)
+
+    memory_template = templates_dir / "memory" / "MEMORY.md"
     memory_file = memory_dir / "MEMORY.md"
     if not memory_file.exists():
-        memory_file.write_text("""# Long-term Memory
-
-This file stores important information that should persist across sessions.
-
-## User Information
-
-(Important facts about the user)
-
-## Preferences
-
-(User preferences learned over time)
-
-## Important Notes
-
-(Things to remember)
-""")
+        memory_file.write_text(memory_template.read_text(encoding="utf-8"), encoding="utf-8")
         console.print("  [dim]Created memory/MEMORY.md[/dim]")
 
     history_file = memory_dir / "HISTORY.md"
     if not history_file.exists():
-        history_file.write_text("")
+        history_file.write_text("", encoding="utf-8")
         console.print("  [dim]Created memory/HISTORY.md[/dim]")
 
-    # Create skills directory for custom user skills
-    skills_dir = workspace / "skills"
-    skills_dir.mkdir(exist_ok=True)
+    (workspace / "skills").mkdir(exist_ok=True)
 
 
-def _make_provider(config):
-    """Create LiteLLMProvider from config. Exits if no API key found."""
-    from nanocrew.providers.litellm_provider import LiteLLMProvider
+def _make_provider(config: Config):
+    """Create the appropriate LLM provider from config."""
+    from nanobot.providers.litellm_provider import LiteLLMProvider
+    from nanobot.providers.openai_codex_provider import OpenAICodexProvider
+    from nanobot.providers.custom_provider import CustomProvider
 
-    p = config.get_provider()
-    model = config.agents.get_main_agent().model
-    if not (p and p.api_key) and not model.startswith("bedrock/"):
+    model = config.agents.defaults.model
+    provider_name = config.get_provider_name(model)
+    p = config.get_provider(model)
+
+    # OpenAI Codex (OAuth)
+    if provider_name == "openai_codex" or model.startswith("openai-codex/"):
+        return OpenAICodexProvider(default_model=model)
+
+    # Custom: direct OpenAI-compatible endpoint, bypasses LiteLLM
+    if provider_name == "custom":
+        return CustomProvider(
+            api_key=p.api_key if p else "no-key",
+            api_base=config.get_api_base(model) or "http://localhost:8000/v1",
+            default_model=model,
+        )
+
+    from nanobot.providers.registry import find_by_name
+    spec = find_by_name(provider_name)
+    if not model.startswith("bedrock/") and not (p and p.api_key) and not (spec and spec.is_oauth):
         console.print("[red]Error: No API key configured.[/red]")
-        console.print("Set one in ~/.nanocrew/config.json under providers section")
+        console.print("Set one in ~/.nanobot/config.json under providers section")
         raise typer.Exit(1)
+
     return LiteLLMProvider(
         api_key=p.api_key if p else None,
-        api_base=config.get_api_base(),
+        api_base=config.get_api_base(model),
         default_model=model,
         extra_headers=p.extra_headers if p else None,
-        provider_name=config.get_provider_name(),
+        provider_name=provider_name,
     )
 
 
@@ -417,146 +277,151 @@ def gateway(
     port: int = typer.Option(18790, "--port", "-p", help="Gateway port"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ):
-    """Start the nanocrew gateway."""
-    from pathlib import Path
-    from nanocrew.config.loader import load_config, get_data_dir
-    from nanocrew.bus.queue import MessageBus
-    from nanocrew.agent.registry import AgentRegistry
-    from nanocrew.agent.manager import MultiAgentManager
-    from nanocrew.channels.manager import ChannelManager
-    from nanocrew.cron.service import CronService
-    from nanocrew.cron.types import CronJob
-    from nanocrew.heartbeat.service import HeartbeatService
-    from nanocrew.config.watcher import FileWatcherService
-    from loguru import logger
-
+    """Start the nanobot gateway."""
+    from nanobot.config.loader import load_config, get_data_dir
+    from nanobot.bus.queue import MessageBus
+    from nanobot.agent.loop import AgentLoop
+    from nanobot.channels.manager import ChannelManager
+    from nanobot.session.manager import SessionManager
+    from nanobot.cron.service import CronService
+    from nanobot.cron.types import CronJob
+    from nanobot.heartbeat.service import HeartbeatService
+    
     if verbose:
         import logging
-
         logging.basicConfig(level=logging.DEBUG)
-
-    console.print(f"{__logo__} Starting nanocrew gateway on port {port}...")
-
+    
+    console.print(f"{__logo__} Starting nanobot gateway on port {port}...")
+    
     config = load_config()
     bus = MessageBus()
     provider = _make_provider(config)
-
-    # Create agent registry with hot reload support
-    agent_registry = AgentRegistry(config)
-
-    # Create file watcher service for hot reload
-    file_watcher = FileWatcherService(debounce_ms=500)
-
-    # Create multi-agent manager with file watcher
-    agent_manager = MultiAgentManager(
-        bus=bus,
-        provider=provider,
-        registry=agent_registry,
-        tavily_api_key=config.tools.web.search.api_key or None,
-        exec_config=config.tools.exec,
-        restrict_to_workspace=config.tools.restrict_to_workspace,
-        file_watcher=file_watcher,
-    )
-
-    # Create cron service
+    session_manager = SessionManager(config.workspace_path)
+    
+    # Create cron service first (callback set after agent creation)
     cron_store_path = get_data_dir() / "cron" / "jobs.json"
     cron = CronService(cron_store_path)
-
-    # Set cron callback - routes to the job's specified agent
+    
+    # Create agent with cron service
+    agent = AgentLoop(
+        bus=bus,
+        provider=provider,
+        workspace=config.workspace_path,
+        model=config.agents.defaults.model,
+        temperature=config.agents.defaults.temperature,
+        max_tokens=config.agents.defaults.max_tokens,
+        max_iterations=config.agents.defaults.max_tool_iterations,
+        memory_window=config.agents.defaults.memory_window,
+        brave_api_key=config.tools.web.search.api_key or None,
+        exec_config=config.tools.exec,
+        cron_service=cron,
+        restrict_to_workspace=config.tools.restrict_to_workspace,
+        session_manager=session_manager,
+        mcp_servers=config.tools.mcp_servers,
+        channels_config=config.channels,
+    )
+    
+    # Set cron callback (needs agent)
     async def on_cron_job(job: CronJob) -> str | None:
-        """Execute a cron job through the appropriate agent."""
-        # Get agent from job payload, fallback to "main"
-        agent_name = job.payload.agent or "main"
-
-        # Validate agent exists, fallback to main with warning if not
-        if agent_name not in agent_manager.registry._config.agents.registry:
-            if agent_name != "main":
-                logger.warning(
-                    f"Cron job '{job.name}' specifies unknown agent '{agent_name}', falling back to 'main'"
-                )
-            agent_name = "main"
-
-        agent_loop = agent_manager.get_loop(agent_name)
-        response = await agent_loop.process_direct(
+        """Execute a cron job through the agent."""
+        response = await agent.process_direct(
             job.payload.message,
             session_key=f"cron:{job.id}",
             channel=job.payload.channel or "cli",
             chat_id=job.payload.to or "direct",
         )
         if job.payload.deliver and job.payload.to:
-            from nanocrew.bus.events import OutboundMessage
-
-            await bus.publish_outbound(
-                OutboundMessage(
-                    channel=job.payload.channel or "cli",
-                    chat_id=job.payload.to,
-                    content=response or "",
-                )
-            )
+            from nanobot.bus.events import OutboundMessage
+            await bus.publish_outbound(OutboundMessage(
+                channel=job.payload.channel or "cli",
+                chat_id=job.payload.to,
+                content=response or ""
+            ))
         return response
-
     cron.on_job = on_cron_job
+    
+    # Create channel manager
+    channels = ChannelManager(config, bus)
 
-    # Create heartbeat service - uses main agent
+    def _pick_heartbeat_target() -> tuple[str, str]:
+        """Pick a routable channel/chat target for heartbeat-triggered messages."""
+        enabled = set(channels.enabled_channels)
+        # Prefer the most recently updated non-internal session on an enabled channel.
+        for item in session_manager.list_sessions():
+            key = item.get("key") or ""
+            if ":" not in key:
+                continue
+            channel, chat_id = key.split(":", 1)
+            if channel in {"cli", "system"}:
+                continue
+            if channel in enabled and chat_id:
+                return channel, chat_id
+        # Fallback keeps prior behavior but remains explicit.
+        return "cli", "direct"
+
+    # Create heartbeat service
     async def on_heartbeat(prompt: str) -> str:
-        """Execute heartbeat through the main agent."""
-        main_loop = agent_manager.get_loop("main")
-        return await main_loop.process_direct(prompt, session_key="heartbeat")
+        """Execute heartbeat through the agent."""
+        channel, chat_id = _pick_heartbeat_target()
+
+        async def _silent(*_args, **_kwargs):
+            pass
+
+        return await agent.process_direct(
+            prompt,
+            session_key="heartbeat",
+            channel=channel,
+            chat_id=chat_id,
+            on_progress=_silent,  # suppress: heartbeat should not push progress to external channels
+        )
+
+    async def on_heartbeat_notify(response: str) -> None:
+        """Deliver a heartbeat response to the user's channel."""
+        from nanobot.bus.events import OutboundMessage
+        channel, chat_id = _pick_heartbeat_target()
+        if channel == "cli":
+            return  # No external channel available to deliver to
+        await bus.publish_outbound(OutboundMessage(channel=channel, chat_id=chat_id, content=response))
 
     heartbeat = HeartbeatService(
-        workspace=agent_registry.get_workspace_for_session("heartbeat"),
+        workspace=config.workspace_path,
         on_heartbeat=on_heartbeat,
+        on_notify=on_heartbeat_notify,
         interval_s=30 * 60,  # 30 minutes
-        enabled=True,
+        enabled=True
     )
-
-    # Create channel manager with multi-agent support
-    channels = ChannelManager(config, bus, agent_manager)
-
+    
     if channels.enabled_channels:
         console.print(f"[green]✓[/green] Channels enabled: {', '.join(channels.enabled_channels)}")
     else:
         console.print("[yellow]Warning: No channels enabled[/yellow]")
-
-    # Register initial agents with file watcher before starting services
-    for agent_name, agent_config in agent_registry.list_agents().items():
-        workspace = Path(agent_config.workspace).expanduser()
-        # Don't create loops yet, just register paths for watching
-        # The actual loops will be created on first use
-        file_watcher.register_agent(name=agent_name, workspace=workspace)
-
-    # Show registered agents
-    agents = agent_registry.list_agents()
-    if agents:
-        console.print(f"[green]✓[/green] Agents: {', '.join(agents.keys())}")
-
+    
     cron_status = cron.status()
     if cron_status["jobs"] > 0:
         console.print(f"[green]✓[/green] Cron: {cron_status['jobs']} scheduled jobs")
-
+    
     console.print(f"[green]✓[/green] Heartbeat: every 30m")
-
+    
     async def run():
         try:
-            # Start file watcher first (before manager subscribes to events)
-            await file_watcher.start()
-            # Start agent manager (subscribes to events)
-            await agent_manager.start()
             await cron.start()
             await heartbeat.start()
-            # Run channel manager (which routes to appropriate agents)
-            await channels.start_all()
+            await asyncio.gather(
+                agent.run(),
+                channels.start_all(),
+            )
         except KeyboardInterrupt:
             console.print("\nShutting down...")
+        finally:
+            await agent.close_mcp()
             heartbeat.stop()
             cron.stop()
-            # Stop in reverse order of startup
-            await agent_manager.stop()
-            await file_watcher.stop()
-            agent_manager.cleanup()
+            agent.stop()
             await channels.stop_all()
-
+    
     asyncio.run(run())
+
+
 
 
 # ============================================================================
@@ -568,69 +433,82 @@ def gateway(
 def agent(
     message: str = typer.Option(None, "--message", "-m", help="Message to send to the agent"),
     session_id: str = typer.Option("cli:direct", "--session", "-s", help="Session ID"),
-    markdown: bool = typer.Option(
-        True, "--markdown/--no-markdown", help="Render assistant output as Markdown"
-    ),
-    logs: bool = typer.Option(
-        False, "--logs/--no-logs", help="Show nanocrew runtime logs during chat"
-    ),
+    markdown: bool = typer.Option(True, "--markdown/--no-markdown", help="Render assistant output as Markdown"),
+    logs: bool = typer.Option(False, "--logs/--no-logs", help="Show nanobot runtime logs during chat"),
 ):
     """Interact with the agent directly."""
-    from nanocrew.config.loader import load_config
-    from nanocrew.bus.queue import MessageBus
-    from nanocrew.agent.loop import AgentLoop
-    from nanocrew.agent.registry import AgentRegistry
+    from nanobot.config.loader import load_config, get_data_dir
+    from nanobot.bus.queue import MessageBus
+    from nanobot.agent.loop import AgentLoop
+    from nanobot.cron.service import CronService
     from loguru import logger
-
+    
     config = load_config()
-
+    
     bus = MessageBus()
     provider = _make_provider(config)
 
+    # Create cron service for tool usage (no callback needed for CLI unless running)
+    cron_store_path = get_data_dir() / "cron" / "jobs.json"
+    cron = CronService(cron_store_path)
+
     if logs:
-        logger.enable("nanocrew")
+        logger.enable("nanobot")
     else:
-        logger.disable("nanocrew")
-
-    # Create registry for dynamic config fetching
-    agent_registry = AgentRegistry(config)
-
+        logger.disable("nanobot")
+    
     agent_loop = AgentLoop(
         bus=bus,
         provider=provider,
         workspace=config.workspace_path,
-        agent_name="main",
-        registry=agent_registry,
-        max_iterations=config.agents.get_main_agent().max_tool_iterations,
-        memory_window=config.agents.get_main_agent().memory_window,
-        tavily_api_key=config.tools.web.search.api_key or None,
+        model=config.agents.defaults.model,
+        temperature=config.agents.defaults.temperature,
+        max_tokens=config.agents.defaults.max_tokens,
+        max_iterations=config.agents.defaults.max_tool_iterations,
+        memory_window=config.agents.defaults.memory_window,
+        brave_api_key=config.tools.web.search.api_key or None,
         exec_config=config.tools.exec,
+        cron_service=cron,
         restrict_to_workspace=config.tools.restrict_to_workspace,
+        mcp_servers=config.tools.mcp_servers,
+        channels_config=config.channels,
     )
-
+    
     # Show spinner when logs are off (no output to miss); skip when logs are on
     def _thinking_ctx():
         if logs:
             from contextlib import nullcontext
-
             return nullcontext()
         # Animated spinner is safe to use with prompt_toolkit input handling
-        return console.status("[dim]nanocrew is thinking...[/dim]", spinner="dots")
+        return console.status("[dim]nanobot is thinking...[/dim]", spinner="dots")
+
+    async def _cli_progress(content: str, *, tool_hint: bool = False) -> None:
+        ch = agent_loop.channels_config
+        if ch and tool_hint and not ch.send_tool_hints:
+            return
+        if ch and not tool_hint and not ch.send_progress:
+            return
+        console.print(f"  [dim]↳ {content}[/dim]")
 
     if message:
-        # Single message mode
+        # Single message mode — direct call, no bus needed
         async def run_once():
             with _thinking_ctx():
-                response = await agent_loop.process_direct(message, session_id)
+                response = await agent_loop.process_direct(message, session_id, on_progress=_cli_progress)
             _print_agent_response(response, render_markdown=markdown)
+            await agent_loop.close_mcp()
 
         asyncio.run(run_once())
     else:
-        # Interactive mode
+        # Interactive mode — route through bus like other channels
+        from nanobot.bus.events import InboundMessage
         _init_prompt_session()
-        console.print(
-            f"{__logo__} Interactive mode (type [bold]exit[/bold] or [bold]Ctrl+C[/bold] to quit)\n"
-        )
+        console.print(f"{__logo__} Interactive mode (type [bold]exit[/bold] or [bold]Ctrl+C[/bold] to quit)\n")
+
+        if ":" in session_id:
+            cli_channel, cli_chat_id = session_id.split(":", 1)
+        else:
+            cli_channel, cli_chat_id = "cli", session_id
 
         def _exit_on_sigint(signum, frame):
             _restore_terminal()
@@ -640,30 +518,80 @@ def agent(
         signal.signal(signal.SIGINT, _exit_on_sigint)
 
         async def run_interactive():
-            while True:
-                try:
-                    _flush_pending_tty_input()
-                    user_input = await _read_interactive_input_async()
-                    command = user_input.strip()
-                    if not command:
-                        continue
+            bus_task = asyncio.create_task(agent_loop.run())
+            turn_done = asyncio.Event()
+            turn_done.set()
+            turn_response: list[str] = []
 
-                    if _is_exit_command(command):
+            async def _consume_outbound():
+                while True:
+                    try:
+                        msg = await asyncio.wait_for(bus.consume_outbound(), timeout=1.0)
+                        if msg.metadata.get("_progress"):
+                            is_tool_hint = msg.metadata.get("_tool_hint", False)
+                            ch = agent_loop.channels_config
+                            if ch and is_tool_hint and not ch.send_tool_hints:
+                                pass
+                            elif ch and not is_tool_hint and not ch.send_progress:
+                                pass
+                            else:
+                                console.print(f"  [dim]↳ {msg.content}[/dim]")
+                        elif not turn_done.is_set():
+                            if msg.content:
+                                turn_response.append(msg.content)
+                            turn_done.set()
+                        elif msg.content:
+                            console.print()
+                            _print_agent_response(msg.content, render_markdown=markdown)
+                    except asyncio.TimeoutError:
+                        continue
+                    except asyncio.CancelledError:
+                        break
+
+            outbound_task = asyncio.create_task(_consume_outbound())
+
+            try:
+                while True:
+                    try:
+                        _flush_pending_tty_input()
+                        user_input = await _read_interactive_input_async()
+                        command = user_input.strip()
+                        if not command:
+                            continue
+
+                        if _is_exit_command(command):
+                            _restore_terminal()
+                            console.print("\nGoodbye!")
+                            break
+
+                        turn_done.clear()
+                        turn_response.clear()
+
+                        await bus.publish_inbound(InboundMessage(
+                            channel=cli_channel,
+                            sender_id="user",
+                            chat_id=cli_chat_id,
+                            content=user_input,
+                        ))
+
+                        with _thinking_ctx():
+                            await turn_done.wait()
+
+                        if turn_response:
+                            _print_agent_response(turn_response[0], render_markdown=markdown)
+                    except KeyboardInterrupt:
                         _restore_terminal()
                         console.print("\nGoodbye!")
                         break
-
-                    with _thinking_ctx():
-                        response = await agent_loop.process_direct(user_input, session_id)
-                    _print_agent_response(response, render_markdown=markdown)
-                except KeyboardInterrupt:
-                    _restore_terminal()
-                    console.print("\nGoodbye!")
-                    break
-                except EOFError:
-                    _restore_terminal()
-                    console.print("\nGoodbye!")
-                    break
+                    except EOFError:
+                        _restore_terminal()
+                        console.print("\nGoodbye!")
+                        break
+            finally:
+                agent_loop.stop()
+                outbound_task.cancel()
+                await asyncio.gather(bus_task, outbound_task, return_exceptions=True)
+                await agent_loop.close_mcp()
 
         asyncio.run(run_interactive())
 
@@ -680,7 +608,7 @@ app.add_typer(channels_app, name="channels")
 @channels_app.command("status")
 def channels_status():
     """Show channel status."""
-    from nanocrew.config.loader import load_config
+    from nanobot.config.loader import load_config
 
     config = load_config()
 
@@ -689,200 +617,167 @@ def channels_status():
     table.add_column("Enabled", style="green")
     table.add_column("Configuration", style="yellow")
 
+    # WhatsApp
+    wa = config.channels.whatsapp
+    table.add_row(
+        "WhatsApp",
+        "✓" if wa.enabled else "✗",
+        wa.bridge_url
+    )
+
     dc = config.channels.discord
-    table.add_row("Discord", "✓" if dc.enabled else "✗", dc.gateway_url)
+    table.add_row(
+        "Discord",
+        "✓" if dc.enabled else "✗",
+        dc.gateway_url
+    )
 
     # Feishu
     fs = config.channels.feishu
     fs_config = f"app_id: {fs.app_id[:10]}..." if fs.app_id else "[dim]not configured[/dim]"
-    table.add_row("Feishu", "✓" if fs.enabled else "✗", fs_config)
+    table.add_row(
+        "Feishu",
+        "✓" if fs.enabled else "✗",
+        fs_config
+    )
 
     # Mochat
     mc = config.channels.mochat
     mc_base = mc.base_url or "[dim]not configured[/dim]"
-    table.add_row("Mochat", "✓" if mc.enabled else "✗", mc_base)
-
+    table.add_row(
+        "Mochat",
+        "✓" if mc.enabled else "✗",
+        mc_base
+    )
+    
     # Telegram
     tg = config.channels.telegram
     tg_config = f"token: {tg.token[:10]}..." if tg.token else "[dim]not configured[/dim]"
-    table.add_row("Telegram", "✓" if tg.enabled else "✗", tg_config)
+    table.add_row(
+        "Telegram",
+        "✓" if tg.enabled else "✗",
+        tg_config
+    )
 
     # Slack
     slack = config.channels.slack
     slack_config = "socket" if slack.app_token and slack.bot_token else "[dim]not configured[/dim]"
-    table.add_row("Slack", "✓" if slack.enabled else "✗", slack_config)
+    table.add_row(
+        "Slack",
+        "✓" if slack.enabled else "✗",
+        slack_config
+    )
+
+    # DingTalk
+    dt = config.channels.dingtalk
+    dt_config = f"client_id: {dt.client_id[:10]}..." if dt.client_id else "[dim]not configured[/dim]"
+    table.add_row(
+        "DingTalk",
+        "✓" if dt.enabled else "✗",
+        dt_config
+    )
+
+    # QQ
+    qq = config.channels.qq
+    qq_config = f"app_id: {qq.app_id[:10]}..." if qq.app_id else "[dim]not configured[/dim]"
+    table.add_row(
+        "QQ",
+        "✓" if qq.enabled else "✗",
+        qq_config
+    )
+
+    # Email
+    em = config.channels.email
+    em_config = em.imap_host if em.imap_host else "[dim]not configured[/dim]"
+    table.add_row(
+        "Email",
+        "✓" if em.enabled else "✗",
+        em_config
+    )
 
     console.print(table)
+
+
+def _get_bridge_dir() -> Path:
+    """Get the bridge directory, setting it up if needed."""
+    import shutil
+    import subprocess
+    
+    # User's bridge location
+    user_bridge = Path.home() / ".nanobot" / "bridge"
+    
+    # Check if already built
+    if (user_bridge / "dist" / "index.js").exists():
+        return user_bridge
+    
+    # Check for npm
+    if not shutil.which("npm"):
+        console.print("[red]npm not found. Please install Node.js >= 18.[/red]")
+        raise typer.Exit(1)
+    
+    # Find source bridge: first check package data, then source dir
+    pkg_bridge = Path(__file__).parent.parent / "bridge"  # nanobot/bridge (installed)
+    src_bridge = Path(__file__).parent.parent.parent / "bridge"  # repo root/bridge (dev)
+    
+    source = None
+    if (pkg_bridge / "package.json").exists():
+        source = pkg_bridge
+    elif (src_bridge / "package.json").exists():
+        source = src_bridge
+    
+    if not source:
+        console.print("[red]Bridge source not found.[/red]")
+        console.print("Try reinstalling: pip install --force-reinstall nanobot")
+        raise typer.Exit(1)
+    
+    console.print(f"{__logo__} Setting up bridge...")
+    
+    # Copy to user directory
+    user_bridge.parent.mkdir(parents=True, exist_ok=True)
+    if user_bridge.exists():
+        shutil.rmtree(user_bridge)
+    shutil.copytree(source, user_bridge, ignore=shutil.ignore_patterns("node_modules", "dist"))
+    
+    # Install and build
+    try:
+        console.print("  Installing dependencies...")
+        subprocess.run(["npm", "install"], cwd=user_bridge, check=True, capture_output=True)
+        
+        console.print("  Building...")
+        subprocess.run(["npm", "run", "build"], cwd=user_bridge, check=True, capture_output=True)
+        
+        console.print("[green]✓[/green] Bridge ready\n")
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Build failed: {e}[/red]")
+        if e.stderr:
+            console.print(f"[dim]{e.stderr.decode()[:500]}[/dim]")
+        raise typer.Exit(1)
+    
+    return user_bridge
 
 
 @channels_app.command("login")
 def channels_login():
     """Link device via QR code."""
-    console.print("[yellow]No channels require QR code login.[/yellow]")
-    console.print("All supported channels use token-based authentication.")
-
-
-# ============================================================================
-# Agent Commands
-# ============================================================================
-
-agent_app = typer.Typer(help="Manage agents")
-app.add_typer(agent_app, name="agent")
-
-
-@agent_app.command("list")
-def agent_list():
-    """List all registered agents."""
-    from nanocrew.config.loader import load_config
-
+    import subprocess
+    from nanobot.config.loader import load_config
+    
     config = load_config()
-
-    table = Table(title="Agents")
-    table.add_column("Name", style="cyan")
-    table.add_column("Model", style="green")
-    table.add_column("Workspace", style="yellow")
-
-    for name, agent_config in config.agents.registry.items():
-        workspace_display = agent_config.workspace.replace(str(Path.home()), "~")
-        table.add_row(
-            name + (" [dim](default)" if name == "main" else ""),
-            agent_config.model,
-            workspace_display,
-        )
-
-    console.print(table)
-
-    # Show bindings if any
-    if config.agents.bindings:
-        console.print("\n[bold]Session Bindings:[/bold]")
-        binding_table = Table()
-        binding_table.add_column("Session", style="cyan")
-        binding_table.add_column("Agent", style="green")
-        for session, agent in config.agents.bindings.items():
-            binding_table.add_row(session, agent)
-        console.print(binding_table)
-
-
-@agent_app.command("show")
-def agent_show(name: str = typer.Argument(..., help="Agent name")):
-    """Show detailed information about an agent."""
-    from nanocrew.config.loader import load_config
-
-    config = load_config()
-
-    if name not in config.agents.registry:
-        console.print(f"[red]Agent '{name}' not found.[/red]")
-        console.print(f"Available agents: {', '.join(config.agents.registry.keys())}")
-        raise typer.Exit(1)
-
-    agent_config = config.agents.registry[name]
-
-    console.print(f"[bold cyan]{name}[/bold cyan]")
-    console.print(f"  Model: {agent_config.model}")
-    console.print(f"  Temperature: {agent_config.temperature}")
-    console.print(f"  Max Tokens: {agent_config.max_tokens}")
-    console.print(f"  Max Tool Iterations: {agent_config.max_tool_iterations}")
-    console.print(f"  Memory Window: {agent_config.memory_window}")
-    console.print(f"  Workspace: {agent_config.workspace}")
-
-    if agent_config.system_prompt:
-        console.print(f"  System Prompt: {agent_config.system_prompt[:100]}...")
-
-
-@agent_app.command("bind")
-def agent_bind(
-    session: str = typer.Argument(..., help="Session key (e.g., feishu:oc_xxx)"),
-    agent_name: str = typer.Argument(..., help="Agent name to bind"),
-):
-    """Bind a session to an agent."""
-    from nanocrew.config.loader import load_config, save_config
-
-    config = load_config()
-
-    if agent_name not in config.agents.registry:
-        console.print(f"[red]Agent '{agent_name}' not found.[/red]")
-        console.print(f"Available agents: {', '.join(config.agents.registry.keys())}")
-        raise typer.Exit(1)
-
-    config.agents.bindings[session] = agent_name
-    save_config(config)
-
-    console.print(f"[green]✓[/green] Bound session '{session}' to agent '{agent_name}'")
-
-
-@agent_app.command("unbind")
-def agent_unbind(
-    session: str = typer.Argument(..., help="Session key to unbind"),
-):
-    """Remove a session-agent binding."""
-    from nanocrew.config.loader import load_config, save_config
-
-    config = load_config()
-
-    if session not in config.agents.bindings:
-        console.print(f"[yellow]Session '{session}' has no binding[/yellow]")
-        raise typer.Exit(1)
-
-    del config.agents.bindings[session]
-    save_config(config)
-
-    console.print(f"[green]✓[/green] Removed binding for session '{session}'")
-
-
-@agent_app.command("create")
-def agent_create(
-    name: str = typer.Argument(..., help="Agent name"),
-    workspace: str = typer.Option(None, "--workspace", "-w", help="Workspace path"),
-    model: str = typer.Option(None, "--model", "-m", help="Model name"),
-    temperature: float = typer.Option(
-        None, "--temperature", "-t", help="Temperature (defaults to main agent's temperature)"
-    ),
-):
-    """Create a new agent."""
-    from nanocrew.config.loader import load_config, save_config
-    from nanocrew.config.schema import AgentDefinition
-
-    config = load_config()
-
-    if name in config.agents.registry:
-        console.print(f"[red]Agent '{name}' already exists.[/red]")
-        raise typer.Exit(1)
-
-    # Use main agent config as template
-    main = config.agents.get_main_agent()
-    agent_workspace = workspace or f"~/.nanocrew/workspaces/{name}"
-
-    # Inherit from main
-    agent_model = model or main.model
-    agent_temperature = temperature if temperature is not None else main.temperature
-
-    # Create agent with values copied from main
-    config.agents.registry[name] = AgentDefinition(
-        workspace=agent_workspace,
-        model=agent_model,
-        temperature=agent_temperature,
-        max_tokens=main.max_tokens,
-        max_tool_iterations=main.max_tool_iterations,
-        memory_window=main.memory_window,
-    )
-
-    save_config(config)
-
-    # Create workspace directory with full structure
-    ws_path = Path(agent_workspace).expanduser()
-    _create_agent_workspace(ws_path, name)
-
-    console.print(f"[green]✓[/green] Created agent '{name}'")
-    console.print(f"  Workspace: {agent_workspace}")
-    console.print(f"  Model: {agent_model}")
-    console.print(f"\nUse [bold]nanocrew agent bind <session> {name}[/bold] to bind a session")
-
-
-def _create_agent_workspace(workspace: Path, agent_name: str) -> None:
-    """Create complete workspace structure for a new agent."""
-    from nanocrew.config.migration import ensure_agent_workspace
-
-    ensure_agent_workspace(workspace, agent_name)
+    bridge_dir = _get_bridge_dir()
+    
+    console.print(f"{__logo__} Starting bridge...")
+    console.print("Scan the QR code to connect.\n")
+    
+    env = {**os.environ}
+    if config.channels.whatsapp.bridge_token:
+        env["BRIDGE_TOKEN"] = config.channels.whatsapp.bridge_token
+    
+    try:
+        subprocess.run(["npm", "start"], cwd=bridge_dir, check=True, env=env)
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Bridge failed: {e}[/red]")
+    except FileNotFoundError:
+        console.print("[red]npm not found. Please install Node.js.[/red]")
 
 
 # ============================================================================
@@ -898,48 +793,51 @@ def cron_list(
     all: bool = typer.Option(False, "--all", "-a", help="Include disabled jobs"),
 ):
     """List scheduled jobs."""
-    from nanocrew.config.loader import get_data_dir
-    from nanocrew.cron.service import CronService
-
+    from nanobot.config.loader import get_data_dir
+    from nanobot.cron.service import CronService
+    
     store_path = get_data_dir() / "cron" / "jobs.json"
     service = CronService(store_path)
-
+    
     jobs = service.list_jobs(include_disabled=all)
-
+    
     if not jobs:
         console.print("No scheduled jobs.")
         return
-
+    
     table = Table(title="Scheduled Jobs")
     table.add_column("ID", style="cyan")
     table.add_column("Name")
     table.add_column("Schedule")
     table.add_column("Status")
     table.add_column("Next Run")
-
+    
     import time
-
+    from datetime import datetime as _dt
+    from zoneinfo import ZoneInfo
     for job in jobs:
         # Format schedule
         if job.schedule.kind == "every":
             sched = f"every {(job.schedule.every_ms or 0) // 1000}s"
         elif job.schedule.kind == "cron":
-            sched = job.schedule.expr or ""
+            sched = f"{job.schedule.expr or ''} ({job.schedule.tz})" if job.schedule.tz else (job.schedule.expr or "")
         else:
             sched = "one-time"
-
+        
         # Format next run
         next_run = ""
         if job.state.next_run_at_ms:
-            next_time = time.strftime(
-                "%Y-%m-%d %H:%M", time.localtime(job.state.next_run_at_ms / 1000)
-            )
-            next_run = next_time
-
+            ts = job.state.next_run_at_ms / 1000
+            try:
+                tz = ZoneInfo(job.schedule.tz) if job.schedule.tz else None
+                next_run = _dt.fromtimestamp(ts, tz).strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                next_run = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts))
+        
         status = "[green]enabled[/green]" if job.enabled else "[dim]disabled[/dim]"
-
+        
         table.add_row(job.id, job.name, sched, status, next_run)
-
+    
     console.print(table)
 
 
@@ -949,43 +847,49 @@ def cron_add(
     message: str = typer.Option(..., "--message", "-m", help="Message for agent"),
     every: int = typer.Option(None, "--every", "-e", help="Run every N seconds"),
     cron_expr: str = typer.Option(None, "--cron", "-c", help="Cron expression (e.g. '0 9 * * *')"),
+    tz: str | None = typer.Option(None, "--tz", help="IANA timezone for cron (e.g. 'America/Vancouver')"),
     at: str = typer.Option(None, "--at", help="Run once at time (ISO format)"),
     deliver: bool = typer.Option(False, "--deliver", "-d", help="Deliver response to channel"),
     to: str = typer.Option(None, "--to", help="Recipient for delivery"),
-    channel: str = typer.Option(
-        None, "--channel", help="Channel for delivery (e.g. 'telegram', 'whatsapp')"
-    ),
+    channel: str = typer.Option(None, "--channel", help="Channel for delivery (e.g. 'telegram', 'whatsapp')"),
 ):
     """Add a scheduled job."""
-    from nanocrew.config.loader import get_data_dir
-    from nanocrew.cron.service import CronService
-    from nanocrew.cron.types import CronSchedule
+    from nanobot.config.loader import get_data_dir
+    from nanobot.cron.service import CronService
+    from nanobot.cron.types import CronSchedule
+    
+    if tz and not cron_expr:
+        console.print("[red]Error: --tz can only be used with --cron[/red]")
+        raise typer.Exit(1)
 
     # Determine schedule type
     if every:
         schedule = CronSchedule(kind="every", every_ms=every * 1000)
     elif cron_expr:
-        schedule = CronSchedule(kind="cron", expr=cron_expr)
+        schedule = CronSchedule(kind="cron", expr=cron_expr, tz=tz)
     elif at:
         import datetime
-
         dt = datetime.datetime.fromisoformat(at)
         schedule = CronSchedule(kind="at", at_ms=int(dt.timestamp() * 1000))
     else:
         console.print("[red]Error: Must specify --every, --cron, or --at[/red]")
         raise typer.Exit(1)
-
+    
     store_path = get_data_dir() / "cron" / "jobs.json"
     service = CronService(store_path)
-
-    job = service.add_job(
-        name=name,
-        schedule=schedule,
-        message=message,
-        deliver=deliver,
-        to=to,
-        channel=channel,
-    )
+    
+    try:
+        job = service.add_job(
+            name=name,
+            schedule=schedule,
+            message=message,
+            deliver=deliver,
+            to=to,
+            channel=channel,
+        )
+    except ValueError as e:
+        console.print(f"[red]Error: {e}[/red]")
+        raise typer.Exit(1) from e
 
     console.print(f"[green]✓[/green] Added job '{job.name}' ({job.id})")
 
@@ -995,12 +899,12 @@ def cron_remove(
     job_id: str = typer.Argument(..., help="Job ID to remove"),
 ):
     """Remove a scheduled job."""
-    from nanocrew.config.loader import get_data_dir
-    from nanocrew.cron.service import CronService
-
+    from nanobot.config.loader import get_data_dir
+    from nanobot.cron.service import CronService
+    
     store_path = get_data_dir() / "cron" / "jobs.json"
     service = CronService(store_path)
-
+    
     if service.remove_job(job_id):
         console.print(f"[green]✓[/green] Removed job {job_id}")
     else:
@@ -1013,12 +917,12 @@ def cron_enable(
     disable: bool = typer.Option(False, "--disable", help="Disable instead of enable"),
 ):
     """Enable or disable a job."""
-    from nanocrew.config.loader import get_data_dir
-    from nanocrew.cron.service import CronService
-
+    from nanobot.config.loader import get_data_dir
+    from nanobot.cron.service import CronService
+    
     store_path = get_data_dir() / "cron" / "jobs.json"
     service = CronService(store_path)
-
+    
     job = service.enable_job(job_id, enabled=not disable)
     if job:
         status = "disabled" if disable else "enabled"
@@ -1033,17 +937,57 @@ def cron_run(
     force: bool = typer.Option(False, "--force", "-f", help="Run even if disabled"),
 ):
     """Manually run a job."""
-    from nanocrew.config.loader import get_data_dir
-    from nanocrew.cron.service import CronService
+    from loguru import logger
+    from nanobot.config.loader import load_config, get_data_dir
+    from nanobot.cron.service import CronService
+    from nanobot.cron.types import CronJob
+    from nanobot.bus.queue import MessageBus
+    from nanobot.agent.loop import AgentLoop
+    logger.disable("nanobot")
+
+    config = load_config()
+    provider = _make_provider(config)
+    bus = MessageBus()
+    agent_loop = AgentLoop(
+        bus=bus,
+        provider=provider,
+        workspace=config.workspace_path,
+        model=config.agents.defaults.model,
+        temperature=config.agents.defaults.temperature,
+        max_tokens=config.agents.defaults.max_tokens,
+        max_iterations=config.agents.defaults.max_tool_iterations,
+        memory_window=config.agents.defaults.memory_window,
+        brave_api_key=config.tools.web.search.api_key or None,
+        exec_config=config.tools.exec,
+        restrict_to_workspace=config.tools.restrict_to_workspace,
+        mcp_servers=config.tools.mcp_servers,
+        channels_config=config.channels,
+    )
 
     store_path = get_data_dir() / "cron" / "jobs.json"
     service = CronService(store_path)
+
+    result_holder = []
+
+    async def on_job(job: CronJob) -> str | None:
+        response = await agent_loop.process_direct(
+            job.payload.message,
+            session_key=f"cron:{job.id}",
+            channel=job.payload.channel or "cli",
+            chat_id=job.payload.to or "direct",
+        )
+        result_holder.append(response)
+        return response
+
+    service.on_job = on_job
 
     async def run():
         return await service.run_job(job_id, force=force)
 
     if asyncio.run(run()):
-        console.print(f"[green]✓[/green] Job executed")
+        console.print("[green]✓[/green] Job executed")
+        if result_holder:
+            _print_agent_response(result_holder[0], render_markdown=True)
     else:
         console.print(f"[red]Failed to run job {job_id}[/red]")
 
@@ -1055,34 +999,31 @@ def cron_run(
 
 @app.command()
 def status():
-    """Show nanocrew status."""
-    from nanocrew.config.loader import load_config, get_config_path
+    """Show nanobot status."""
+    from nanobot.config.loader import load_config, get_config_path
 
     config_path = get_config_path()
     config = load_config()
     workspace = config.workspace_path
 
-    console.print(f"{__logo__} nanocrew Status\n")
+    console.print(f"{__logo__} nanobot Status\n")
 
-    console.print(
-        f"Config: {config_path} {'[green]✓[/green]' if config_path.exists() else '[red]✗[/red]'}"
-    )
-    console.print(
-        f"Workspace: {workspace} {'[green]✓[/green]' if workspace.exists() else '[red]✗[/red]'}"
-    )
+    console.print(f"Config: {config_path} {'[green]✓[/green]' if config_path.exists() else '[red]✗[/red]'}")
+    console.print(f"Workspace: {workspace} {'[green]✓[/green]' if workspace.exists() else '[red]✗[/red]'}")
 
     if config_path.exists():
-        from nanocrew.providers.registry import PROVIDERS
+        from nanobot.providers.registry import PROVIDERS
 
-        main = config.agents.get_main_agent()
-        console.print(f"Model: {main.model}")
-
+        console.print(f"Model: {config.agents.defaults.model}")
+        
         # Check API keys from registry
         for spec in PROVIDERS:
             p = getattr(config.providers, spec.name, None)
             if p is None:
                 continue
-            if spec.is_local:
+            if spec.is_oauth:
+                console.print(f"{spec.label}: [green]✓ (OAuth)[/green]")
+            elif spec.is_local:
                 # Local deployments show api_base instead of api_key
                 if p.api_base:
                     console.print(f"{spec.label}: [green]✓ {p.api_base}[/green]")
@@ -1090,9 +1031,90 @@ def status():
                     console.print(f"{spec.label}: [dim]not set[/dim]")
             else:
                 has_key = bool(p.api_key)
-                console.print(
-                    f"{spec.label}: {'[green]✓[/green]' if has_key else '[dim]not set[/dim]'}"
-                )
+                console.print(f"{spec.label}: {'[green]✓[/green]' if has_key else '[dim]not set[/dim]'}")
+
+
+# ============================================================================
+# OAuth Login
+# ============================================================================
+
+provider_app = typer.Typer(help="Manage providers")
+app.add_typer(provider_app, name="provider")
+
+
+_LOGIN_HANDLERS: dict[str, callable] = {}
+
+
+def _register_login(name: str):
+    def decorator(fn):
+        _LOGIN_HANDLERS[name] = fn
+        return fn
+    return decorator
+
+
+@provider_app.command("login")
+def provider_login(
+    provider: str = typer.Argument(..., help="OAuth provider (e.g. 'openai-codex', 'github-copilot')"),
+):
+    """Authenticate with an OAuth provider."""
+    from nanobot.providers.registry import PROVIDERS
+
+    key = provider.replace("-", "_")
+    spec = next((s for s in PROVIDERS if s.name == key and s.is_oauth), None)
+    if not spec:
+        names = ", ".join(s.name.replace("_", "-") for s in PROVIDERS if s.is_oauth)
+        console.print(f"[red]Unknown OAuth provider: {provider}[/red]  Supported: {names}")
+        raise typer.Exit(1)
+
+    handler = _LOGIN_HANDLERS.get(spec.name)
+    if not handler:
+        console.print(f"[red]Login not implemented for {spec.label}[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"{__logo__} OAuth Login - {spec.label}\n")
+    handler()
+
+
+@_register_login("openai_codex")
+def _login_openai_codex() -> None:
+    try:
+        from oauth_cli_kit import get_token, login_oauth_interactive
+        token = None
+        try:
+            token = get_token()
+        except Exception:
+            pass
+        if not (token and token.access):
+            console.print("[cyan]Starting interactive OAuth login...[/cyan]\n")
+            token = login_oauth_interactive(
+                print_fn=lambda s: console.print(s),
+                prompt_fn=lambda s: typer.prompt(s),
+            )
+        if not (token and token.access):
+            console.print("[red]✗ Authentication failed[/red]")
+            raise typer.Exit(1)
+        console.print(f"[green]✓ Authenticated with OpenAI Codex[/green]  [dim]{token.account_id}[/dim]")
+    except ImportError:
+        console.print("[red]oauth_cli_kit not installed. Run: pip install oauth-cli-kit[/red]")
+        raise typer.Exit(1)
+
+
+@_register_login("github_copilot")
+def _login_github_copilot() -> None:
+    import asyncio
+
+    console.print("[cyan]Starting GitHub Copilot device flow...[/cyan]\n")
+
+    async def _trigger():
+        from litellm import acompletion
+        await acompletion(model="github_copilot/gpt-4o", messages=[{"role": "user", "content": "hi"}], max_tokens=1)
+
+    try:
+        asyncio.run(_trigger())
+        console.print("[green]✓ Authenticated with GitHub Copilot[/green]")
+    except Exception as e:
+        console.print(f"[red]Authentication error: {e}[/red]")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":
