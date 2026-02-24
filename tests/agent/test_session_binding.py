@@ -6,10 +6,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from nanobot.agent.manager import MultiAgentManager
-from nanobot.agent.registry import AgentRegistry
-from nanobot.config.loader import save_config
-from nanobot.config.schema import AgentDefinition, AgentsConfig, Config, ExecToolConfig
+from nanocrew.agent.manager import MultiAgentManager
+from nanocrew.agent.registry import AgentRegistry
+from nanocrew.config.loader import save_config
+from nanocrew.config.schema import AgentDefinition, AgentsConfig, Config, ExecToolConfig
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ def test_session_binding_resolution(temp_config_dir, multi_agent_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(multi_agent_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(multi_agent_config)
 
@@ -79,7 +79,7 @@ def test_agent_config_isolation(temp_config_dir, multi_agent_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(multi_agent_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(multi_agent_config)
 
@@ -107,7 +107,7 @@ def test_end_to_end_session_routing(temp_config_dir, multi_agent_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(multi_agent_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
 
         bus = MagicMock()
@@ -140,7 +140,7 @@ def test_workspace_per_agent(temp_config_dir, multi_agent_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(multi_agent_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(multi_agent_config)
 

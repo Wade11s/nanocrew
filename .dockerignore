@@ -25,8 +25,8 @@ docs/
 # Assets
 .assets
 
-# nanobot local workspace (contains sensitive config)
-.nanobot/
+# nanocrew local workspace (contains sensitive config)
+.nanocrew/
 workspace/
 
 # OpenSpec local changes

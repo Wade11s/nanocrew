@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from nanobot.agent.registry import AgentRegistry
-from nanobot.config.schema import AgentDefinition, AgentsConfig, Config
+from nanocrew.agent.registry import AgentRegistry
+from nanocrew.config.schema import AgentDefinition, AgentsConfig, Config
 
 
 @pytest.fixture
@@ -48,7 +48,7 @@ def test_agent_registry_initialization(temp_config_dir, sample_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(sample_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(sample_config)
 
@@ -62,7 +62,7 @@ def test_get_for_session_with_binding(temp_config_dir, sample_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(sample_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(sample_config)
 
@@ -77,7 +77,7 @@ def test_get_for_session_unbound_defaults_to_main(temp_config_dir, sample_config
     config_file = temp_config_dir / "config.json"
     config_file.write_text(sample_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(sample_config)
 
@@ -91,7 +91,7 @@ def test_get_agent_name_for_session(temp_config_dir, sample_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(sample_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(sample_config)
 
@@ -105,7 +105,7 @@ def test_get_agent_config(temp_config_dir, sample_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(sample_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(sample_config)
 
@@ -119,7 +119,7 @@ def test_get_agent_config_not_found_defaults_to_main(temp_config_dir, sample_con
     config_file = temp_config_dir / "config.json"
     config_file.write_text(sample_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(sample_config)
 
@@ -133,7 +133,7 @@ def test_list_agents(temp_config_dir, sample_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(sample_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(sample_config)
 
@@ -149,7 +149,7 @@ def test_hot_reload(temp_config_dir, sample_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(sample_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(sample_config)
 
@@ -177,7 +177,7 @@ def test_get_workspace_for_session(temp_config_dir, sample_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(sample_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(sample_config)
 

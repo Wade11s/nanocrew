@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 import pytest
 
-from nanobot.agent.registry import AgentRegistry
-from nanobot.config.schema import AgentDefinition, AgentsConfig, Config
+from nanocrew.agent.registry import AgentRegistry
+from nanocrew.config.schema import AgentDefinition, AgentsConfig, Config
 
 
 @pytest.fixture
@@ -41,7 +41,7 @@ def test_hot_reload_detects_config_change(temp_config_dir, initial_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(initial_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(initial_config)
 
@@ -75,7 +75,7 @@ def test_hot_reload_new_binding(temp_config_dir, initial_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(initial_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(initial_config)
 
@@ -112,7 +112,7 @@ def test_hot_reload_binding_removal(temp_config_dir, initial_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(initial_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
         registry = AgentRegistry(initial_config)
 
@@ -137,7 +137,7 @@ def test_no_reload_when_unchanged(temp_config_dir, initial_config):
     config_file = temp_config_dir / "config.json"
     config_file.write_text(initial_config.model_dump_json())
 
-    with patch("nanobot.config.loader.get_config_path") as mock_path:
+    with patch("nanocrew.config.loader.get_config_path") as mock_path:
         mock_path.return_value = config_file
 
         registry = AgentRegistry(initial_config)

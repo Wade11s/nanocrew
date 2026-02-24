@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from nanobot.agent.manager import MultiAgentManager
-from nanobot.config.schema import AgentDefinition, AgentsConfig, Config, ExecToolConfig
+from nanocrew.agent.manager import MultiAgentManager
+from nanocrew.config.schema import AgentDefinition, AgentsConfig, Config, ExecToolConfig
 
 
 @pytest.fixture
@@ -56,7 +56,7 @@ def manager(mock_dependencies, sample_config):
     """Create a MultiAgentManager instance."""
     bus, provider = mock_dependencies
 
-    with patch("nanobot.agent.registry.AgentRegistry") as mock_registry:
+    with patch("nanocrew.agent.registry.AgentRegistry") as mock_registry:
         mock_registry_instance = MagicMock()
         mock_registry_instance.list_agents.return_value = sample_config.agents.registry
         mock_registry_instance.get_agent_name_for_session.side_effect = lambda s: {

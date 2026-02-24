@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from nanobot.config.migration import (
+from nanocrew.config.migration import (
     ensure_agent_workspace,
     ensure_workspaces_structure,
     get_main_workspace,
@@ -104,7 +104,7 @@ def test_ensure_workspaces_structure(temp_workspace_dir):
         main = tmp_path / "workspaces" / "main"
 
         # Patch _get_data_dir to use temp directory
-        import nanobot.config.migration as migration
+        import nanocrew.config.migration as migration
 
         original_get_data_dir = migration._get_data_dir
         migration._get_data_dir = lambda: tmp_path
@@ -126,7 +126,7 @@ def test_get_main_workspace(temp_workspace_dir):
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
 
-        import nanobot.config.migration as migration
+        import nanocrew.config.migration as migration
 
         original_get_data_dir = migration._get_data_dir
         migration._get_data_dir = lambda: tmp_path
